@@ -108,3 +108,37 @@
     )
   )
 )
+
+;; Withdraw funds by the farmer after the project is fully funded
+(define-public (withdraw-funds (project-id uint))
+  (let ((project (unwrap! (map-get? projects {project-id: project-id}) (err "Project not found"))))
+    (match project
+      project-data
+        (begin
+          ;; Ensure only the farmer can withdraw the funds
+          (asserts! (is-eq tx-sender (get farmer project-data)) (err "Only the farmer can withdraw funds"))
+          ;; Ensure the project is fully funded or the funding period has ended
+          (asserts! (or (is-eq (get status project-data) 1) (>= block-height (get end-time project-data)))
+            (err "Funds cannot be withdrawn yet"))
+
+          ;; Transfer the raised amount to the farmer
+          (stx-transfer? (get amount-raised project-data) contract-owner tx-sender)
+
+          ;; Mark the project status as Closed
+          (map-set projects {project-id: project-id}
+            {
+              farmer: (get farmer project-data),
+              funding-goal: (get funding-goal project-data),
+              amount-raised: (get amount-raised project-data),
+              duration: (get duration project-data),
+              roi: (get roi project-data),
+              end-time: (get end-time project-data),
+              status: 2                               ;; Project status set to Closed
+            }
+          )
+          (ok "Funds withdrawn successfully")
+        )
+      (err "Project not found")
+    )
+  )
+)
