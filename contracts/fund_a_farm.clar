@@ -187,3 +187,32 @@
     )
   )
 )
+
+;; Refund investors if the project fails to reach its funding goal
+(define-public (refund-investors (project-id uint))
+  (let ((project (map-get? projects {project-id: project-id})))
+    (match project
+      project-data
+        (begin
+          ;; Ensure the funding period has ended and the goal was not reached
+          (asserts! (>= block-height (get end-time project-data)) (err "Funding period not over"))
+          (asserts! (< (get amount-raised project-data) (get funding-goal project-data)) (err "Funding goal reached"))
+
+          ;; Refund all investors
+          (let ((investors (map-keys investments {project-id: project-id})))
+            (map
+              (lambda (investor)
+                (let ((investment (map-get investments {project-id: project-id, investor: investor})))
+                  ;; Refund the original investment amount
+                  (stx-transfer? (get amount investment) (contract-owner) investor)
+                )
+              )
+              investors
+            )
+          )
+          (ok "Investors refunded")
+        )
+      (err "Project not found")
+    )
+  )
+)
